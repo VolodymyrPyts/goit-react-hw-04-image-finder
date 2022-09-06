@@ -1,6 +1,7 @@
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 
 import { GetImages } from './services/api';
+import { animateScroll as scroll } from 'react-scroll';
 import { Box } from './theme/Box';
 import { Loader } from './Loader/Loader';
 import { Button } from './Button/Button';
@@ -11,116 +12,81 @@ import { ModalWindow } from './Modal/Modal';
 
 import { Wrapper } from './App.styled';
 
-export class App extends Component {
-  state = {
-    images: [],
-    page: 1,
-    query: '',
-    modalImageSrc: '',
-    showModal: false,
-    isLoading: false,
-    isNotLastPage: false,
-    isEmpty: false,
-  };
+export const App = () => {
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState('');
+  const [modalImageSrc, setModalImageSrc] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isNotLastPage, setIsNotLastPage] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(false);
 
-  componentDidUpdate(_, prevState) {
-    const { query, page } = this.state;
-    if (prevState.query !== query || prevState.page !== page) {
-      this.reciveImagesData();
-    }
+  useEffect(() => {
+    if (!query) return;
+    (async () => {
+      setIsLoading(true);
+      const { imagesData, totalHits, lastPage } = await GetImages(query, page);
 
-    if (page !== 1) {
-      document.body.scrollIntoView({
-        behavior: 'smooth',
-        block: 'end',
-      });
-    }
-  }
+      if (totalHits) {
+        setImages(prevState => [...prevState, ...imagesData]);
+      }
 
-  async reciveImagesData() {
-    const { images, query, page } = this.state;
+      setIsNotLastPage(!lastPage);
+      setIsLoading(false);
+      setIsEmpty(!totalHits);
 
-    this.setState({ isLoading: true });
-    const { imagesData, totalHits } = await GetImages(query, page);
+      if (page !== 1) scroll.scrollToBottom();
+    })();
+  }, [page, query]);
 
-    if (totalHits) {
-      this.setState(prevState => ({
-        images: [...prevState.images, ...imagesData],
-      }));
-    }
-
-    this.setState({
-      isNotLastPage: images.length + imagesData.length < totalHits,
-      isLoading: false,
-      isEmpty: !totalHits,
-    });
-  }
-
-  searchQueryHandler = query => {
+  const searchQueryHandler = query => {
     if (query) {
-      this.setState({
-        images: [],
-        page: 1,
-        query,
-      });
+      setImages([]);
+      setPage(1);
+      setQuery(query);
     }
   };
 
-  loadMoreHandler = () => {
-    this.setState(prevState => ({
-      page: prevState.page + 1,
-    }));
+  const loadMoreHandler = () => {
+    setPage(prevState => prevState + 1);
   };
 
-  openModalHandler = largeImageURL => {
-    this.setState({
-      modalImageSrc: largeImageURL,
-      showModal: true,
-    });
+  const openModalHandler = largeImageURL => {
+    setModalImageSrc(largeImageURL);
+    setShowModal(true);
   };
 
-  closeModalHandler = () => {
-    this.setState({ showModal: false });
+  const closeModalHandler = () => {
+    setShowModal(false);
   };
 
-  render() {
-    const {
-      images,
-      isLoading,
-      isNotLastPage,
-      isEmpty,
-      showModal,
-      modalImageSrc,
-    } = this.state;
+  return (
+    <Wrapper>
+      <Searchbar onSubmit={searchQueryHandler} />
+      <Box display="block" ml="auto">
+        {images.length > 0 && (
+          <ImageGallery images={images} onClick={openModalHandler} />
+        )}
+        {isLoading ? (
+          <Loader />
+        ) : (
+          isNotLastPage && <Button onClick={loadMoreHandler}>Load more</Button>
+        )}
 
-    return (
-      <Wrapper>
-        <Searchbar onSubmit={this.searchQueryHandler} />
-        <Box display="block" ml="auto">
-          {images.length > 0 && (
-            <ImageGallery images={images} onClick={this.openModalHandler} />
-          )}
-          {isLoading ? (
-            <Loader />
-          ) : (
-            isNotLastPage && (
-              <Button onClick={this.loadMoreHandler}>Load more</Button>
-            )
-          )}
-          {isEmpty && (
-            <BadRequest>
-              Sorry, there are no images matching your search query. Please try
-              again.
-            </BadRequest>
-          )}
-          {showModal && (
-            <ModalWindow
-              modalImageSrc={modalImageSrc}
-              onClickOverlay={this.closeModalHandler}
-            />
-          )}
-        </Box>
-      </Wrapper>
-    );
-  }
-}
+        {isEmpty && (
+          <BadRequest>
+            Sorry, there are no images matching your search query. Please try
+            again.
+          </BadRequest>
+        )}
+        {showModal && (
+          <ModalWindow
+            modalImageSrc={modalImageSrc}
+            onClickOverlay={closeModalHandler}
+          />
+        )}
+      </Box>
+    </Wrapper>
+  );
+};
